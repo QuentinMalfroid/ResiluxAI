@@ -11,9 +11,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "OpenAI API key is not configured" }, { status: 500 })
     }
 
-    const formData = await request.formData()
-    const imageData = formData.get("imageData") as string
-    const stoneColor = formData.get("stoneColor") as string
+    const { imageData, stoneColor } = await request.json()
 
     if (!imageData || !stoneColor) {
       return NextResponse.json({ error: "Image data and stone color are required" }, { status: 400 })

@@ -197,23 +197,24 @@ export function ImageEditForm() {
     setResultImage(null)
 
     try {
-      const formData = new FormData()
-      formData.append("imageData", processedImageData)
-      formData.append("stoneColor", selectedColor)
-
-      // Use API route instead of Server Action
       const response = await fetch("/api/edit-image", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          imageData: processedImageData,
+          stoneColor: selectedColor,
+        }),
       })
 
-      const result = await response.json()
-
-      if (!response.ok || result.error) {
-        setError(result.error || "Une erreur s'est produite")
-      } else {
-        setResultImage(result.imageUrl)
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Une erreur s'est produite")
       }
+
+      const result = await response.json()
+      setResultImage(result.imageUrl)
     } catch (err: any) {
       setError(err.message || "Une erreur s'est produite lors du traitement de l'image")
       console.error(err)
