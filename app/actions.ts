@@ -9,19 +9,12 @@ export async function editImage(formData: FormData) {
       }
     }
 
-    const image = formData.get("image") as File
+    const imageData = formData.get("imageData") as string
     const stoneColor = formData.get("stoneColor") as string
 
-    if (!image || !stoneColor) {
+    if (!imageData || !stoneColor) {
       return {
-        error: "Image and stone color are required",
-      }
-    }
-
-    // Validate image size
-    if (image.size > 4 * 1024 * 1024) {
-      return {
-        error: "Image must be less than 4MB",
+        error: "Image data and stone color are required",
       }
     }
 
@@ -37,14 +30,15 @@ The resulting surface must reflect the correct lighting and shadows of the origi
 
 The goal is to help clients visualize what their terrace would look like once resurfaced with this specific stone-resin finish.`
 
-    // Process the image to ensure it meets OpenAI requirements
-    const processedImageBuffer = await processImageForOpenAI(image)
+    // Convert base64 to buffer
+    const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, "")
+    const buffer = Buffer.from(base64Data, "base64")
 
     // Create FormData for the API request
     const apiFormData = new FormData()
 
-    // Create a new File object from the processed buffer
-    const processedFile = new File([processedImageBuffer], "image.png", {
+    // Create a new File object from the buffer
+    const processedFile = new File([buffer], "image.png", {
       type: "image/png",
     })
 
@@ -117,88 +111,4 @@ The goal is to help clients visualize what their terrace would look like once re
       error: error.message || "An error occurred while processing the image",
     }
   }
-}
-
-async function processImageForOpenAI(file: File): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-    const img = new Image()
-
-    img.onload = () => {
-      // Determine optimal size (max 1024x1024 but compress larger images more)
-      const maxSize = 1024
-      const originalSize = Math.max(img.width, img.height)
-
-      // Calculate compression ratio based on original size
-      let targetSize = maxSize
-      let quality = 0.85 // Default quality
-
-      if (originalSize > 2048) {
-        targetSize = 800 // More aggressive compression for very large images
-        quality = 0.75
-      } else if (originalSize > 1536) {
-        targetSize = 900
-        quality = 0.8
-      }
-
-      // Set canvas to square dimensions
-      canvas.width = targetSize
-      canvas.height = targetSize
-
-      // Fill with white background
-      if (ctx) {
-        ctx.fillStyle = "white"
-        ctx.fillRect(0, 0, targetSize, targetSize)
-
-        // Calculate scaling and positioning to center the image
-        const scale = Math.min(targetSize / img.width, targetSize / img.height)
-        const scaledWidth = img.width * scale
-        const scaledHeight = img.height * scale
-        const x = (targetSize - scaledWidth) / 2
-        const y = (targetSize - scaledHeight) / 2
-
-        // Enable image smoothing for better quality
-        ctx.imageSmoothingEnabled = true
-        ctx.imageSmoothingQuality = "high"
-
-        // Draw the image centered on the canvas
-        ctx.drawImage(img, x, y, scaledWidth, scaledHeight)
-
-        // Convert canvas to blob with compression
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              console.log(
-                `Image compressed: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(blob.size / 1024 / 1024).toFixed(2)}MB`,
-              )
-              blob.arrayBuffer().then((buffer) => {
-                resolve(Buffer.from(buffer))
-              })
-            } else {
-              reject(new Error("Failed to convert canvas to blob"))
-            }
-          },
-          "image/png",
-          quality, // Apply compression quality
-        )
-      } else {
-        reject(new Error("Failed to get canvas context"))
-      }
-    }
-
-    img.onerror = () => {
-      reject(new Error("Failed to load image"))
-    }
-
-    // Convert file to data URL
-    const reader = new FileReader()
-    reader.onload = () => {
-      img.src = reader.result as string
-    }
-    reader.onerror = () => {
-      reject(new Error("Failed to read file"))
-    }
-    reader.readAsDataURL(file)
-  })
 }

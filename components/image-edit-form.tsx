@@ -18,12 +18,89 @@ const STONE_COLORS = [
 export function ImageEditForm() {
   const [image, setImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [processedImageData, setProcessedImageData] = useState<string | null>(null)
   const [resultImage, setResultImage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedColor, setSelectedColor] = useState("Light Grey")
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processImageForOpenAI = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement("canvas")
+      const ctx = canvas.getContext("2d")
+      const img = new Image()
+
+      img.onload = () => {
+        // Determine optimal size (max 1024x1024 but compress larger images more)
+        const maxSize = 1024
+        const originalSize = Math.max(img.width, img.height)
+
+        // Calculate compression ratio based on original size
+        let targetSize = maxSize
+        let quality = 0.85 // Default quality
+
+        if (originalSize > 2048) {
+          targetSize = 800 // More aggressive compression for very large images
+          quality = 0.75
+        } else if (originalSize > 1536) {
+          targetSize = 900
+          quality = 0.8
+        }
+
+        // Set canvas to square dimensions
+        canvas.width = targetSize
+        canvas.height = targetSize
+
+        // Fill with white background
+        if (ctx) {
+          ctx.fillStyle = "white"
+          ctx.fillRect(0, 0, targetSize, targetSize)
+
+          // Calculate scaling and positioning to center the image
+          const scale = Math.min(targetSize / img.width, targetSize / img.height)
+          const scaledWidth = img.width * scale
+          const scaledHeight = img.height * scale
+          const x = (targetSize - scaledWidth) / 2
+          const y = (targetSize - scaledHeight) / 2
+
+          // Enable image smoothing for better quality
+          ctx.imageSmoothingEnabled = true
+          ctx.imageSmoothingQuality = "high"
+
+          // Draw the image centered on the canvas
+          ctx.drawImage(img, x, y, scaledWidth, scaledHeight)
+
+          // Convert canvas to base64
+          const dataUrl = canvas.toDataURL("image/png", quality)
+
+          console.log(
+            `Image compressed: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${((dataUrl.length * 0.75) / 1024 / 1024).toFixed(2)}MB (estimated)`,
+          )
+
+          resolve(dataUrl)
+        } else {
+          reject(new Error("Failed to get canvas context"))
+        }
+      }
+
+      img.onerror = () => {
+        reject(new Error("Failed to load image"))
+      }
+
+      // Convert file to data URL
+      const reader = new FileReader()
+      reader.onload = () => {
+        img.src = reader.result as string
+      }
+      reader.onerror = () => {
+        reject(new Error("Failed to read file"))
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       // Validate file size (increased limit since we compress)
@@ -40,21 +117,33 @@ export function ImageEditForm() {
 
       setError(null)
       setResultImage(null)
+      setProcessing(true)
       setImage(file)
 
       console.log(`Image originale: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
 
-      const reader = new FileReader()
-      reader.onload = () => {
-        setImagePreview(reader.result as string)
+      try {
+        // Process image for preview
+        const reader = new FileReader()
+        reader.onload = () => {
+          setImagePreview(reader.result as string)
+        }
+        reader.readAsDataURL(file)
+
+        // Process image for OpenAI
+        const processedData = await processImageForOpenAI(file)
+        setProcessedImageData(processedData)
+      } catch (err: any) {
+        setError("Erreur lors du traitement de l'image: " + err.message)
+      } finally {
+        setProcessing(false)
       }
-      reader.readAsDataURL(file)
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!image) return
+    if (!processedImageData) return
 
     setLoading(true)
     setError(null)
@@ -62,7 +151,7 @@ export function ImageEditForm() {
 
     try {
       const formData = new FormData()
-      formData.append("image", image)
+      formData.append("imageData", processedImageData)
       formData.append("stoneColor", selectedColor)
 
       const result = await editImage(formData)
@@ -100,6 +189,7 @@ export function ImageEditForm() {
   const resetImages = () => {
     setImage(null)
     setImagePreview(null)
+    setProcessedImageData(null)
     setResultImage(null)
     setError(null)
   }
@@ -125,11 +215,18 @@ export function ImageEditForm() {
                     type="file"
                     accept="image/png,image/jpeg,image/jpg"
                     onChange={handleImageChange}
-                    className="w-full file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer"
+                    disabled={processing}
+                    className="w-full file:mr-4 file:py-3 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer disabled:opacity-50"
                   />
-                  <Upload className="absolute right-3 top-3 h-5 w-5 text-gray-400" />
+                  {processing ? (
+                    <Loader2 className="absolute right-3 top-3 h-5 w-5 text-blue-600 animate-spin" />
+                  ) : (
+                    <Upload className="absolute right-3 top-3 h-5 w-5 text-gray-400" />
+                  )}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">PNG ou JPEG, max 10MB (compression automatique)</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {processing ? "Compression en cours..." : "PNG ou JPEG, max 10MB (compression automatique)"}
+                </p>
               </div>
 
               <div>
@@ -183,7 +280,7 @@ export function ImageEditForm() {
                     <Button onClick={resetImages} variant="outline" className="w-full">
                       Changer
                     </Button>
-                    <Button onClick={handleSubmit} disabled={loading} className="w-full">
+                    <Button onClick={handleSubmit} disabled={loading || !processedImageData} className="w-full">
                       {loading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
