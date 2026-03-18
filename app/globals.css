@@ -92,3 +92,12 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@keyframes glow {
+  0% { filter: blur(16px) brightness(1.1); opacity: 0.7; }
+  50% { filter: blur(24px) brightness(1.5); opacity: 1; }
+  100% { filter: blur(16px) brightness(1.1); opacity: 0.7; }
+}
+.animate-glow {
+  animation: glow 2s infinite linear;
+}

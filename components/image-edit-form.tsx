@@ -5,45 +5,89 @@ import { useState, useRef } from "react"
 import { fal } from "@fal-ai/client"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Loader2, Upload, Download } from "lucide-react"
+import { Loader2, Upload, Download, Eye } from "lucide-react"
 import { BeforeAfterSlider } from "./before-after-slider"
 
-// Configure fal client to use our server proxy (hides API key)
 fal.config({ proxyUrl: "/api/fal/proxy" })
 
 const STONE_COLORS = [
-  { value: "Light Grey", label: "Gris Clair", color: "#D1D5DB" },
-  { value: "Dark Grey", label: "Gris Foncé", color: "#6B7280" },
-  { value: "Beige", label: "Beige", color: "#D2B48C" },
+  {
+    value: "Blanc polaire",
+    label: "Blanc polaire",
+    color: "#E8E4DF",
+    description: "white polar small rounded pebbles, very light almost white with slight cream tones",
+  },
+  {
+    value: "Gris clair nuage",
+    label: "Gris clair nuage",
+    color: "#B0B5B8",
+    description: "light grey cloud-colored mix of white and grey small rounded pebbles",
+  },
+  {
+    value: "Gris anthracite",
+    label: "Gris anthracite",
+    color: "#5A5E62",
+    description: "dark anthracite grey mix of dark grey and white small rounded pebbles",
+  },
+  {
+    value: "Noir charbon",
+    label: "Noir charbon",
+    color: "#2C2C2C",
+    description: "charcoal black small rounded pebbles, very dark almost black",
+  },
+  {
+    value: "Beige crème",
+    label: "Beige crème",
+    color: "#D4C4A8",
+    description: "cream beige small rounded pebbles, warm sand-like natural tone",
+  },
+  {
+    value: "Rose corail",
+    label: "Rose corail",
+    color: "#C9A07A",
+    description: "coral pink small rounded pebbles, warm pinkish-salmon natural stone",
+  },
+  {
+    value: "Rouge de Vérone",
+    label: "Rouge de Vérone",
+    color: "#A0522D",
+    description: "Verona red small rounded pebbles, warm terracotta reddish-brown natural stone",
+  },
 ]
 
-function buildPrompt(stoneColor: string) {
-  return `Edit this photo of a terrace to apply a realistic resin-bound gravel surface on the terrace floor only.
+function buildPrompt(color: typeof STONE_COLORS[number]) {
+  return `Edit this photo of a terrace or driveway to apply a realistic resin-bound gravel surface on the ground/floor area only.
 
-IMPORTANT RULES:
-- ONLY modify the terrace floor/ground surface
-- DO NOT alter walls, background, sky, trees, furniture, or any other elements
+CRITICAL RULES:
+- ONLY modify the ground/floor surface (terrace, driveway, patio, pathway)
+- DO NOT alter walls, garage doors, fences, roofs, sky, trees, furniture, or any other elements
 - Preserve the exact same perspective, lighting, and shadows from the original photo
 - The new surface must blend naturally with the existing lighting conditions
 
 SURFACE DETAILS:
-- Material: Resin-bound gravel finish (small tightly-packed pebbles embedded in resin)
-- Stone color: ${stoneColor}
-- Texture: Natural, slightly irregular pebble pattern typical of modern outdoor terraces
-- Finish: Smooth, professional installation look
+- Material: Resin-bound gravel finish — small tightly-packed rounded natural pebbles embedded in clear resin
+- Stone color and texture: ${color.description}
+- The pebbles should be small (3-6mm), tightly packed with minimal gaps
+- The surface should look smooth and professionally installed
+- The resin binder should be barely visible, letting the natural stone color dominate
 
-The goal is a photorealistic visualization of a terrace resurfaced with ${stoneColor} stone-resin finish.`
+LIGHTING:
+- Match the sun direction and shadow angles from the original photo
+- The gravel surface should show subtle shadow variations in any recessed areas
+- Slight specular highlights on individual pebbles where direct sunlight hits
+
+The goal is a photorealistic visualization helping a client see their terrace resurfaced with a ${color.value} stone-resin finish.`
 }
 
 export function ImageEditForm() {
-  const [image, setImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [processedImageData, setProcessedImageData] = useState<string | null>(null)
   const [resultImage, setResultImage] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedColor, setSelectedColor] = useState("Light Grey")
+  const [selectedColor, setSelectedColor] = useState(STONE_COLORS[0].value)
+  const [showDemo, setShowDemo] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -82,7 +126,6 @@ export function ImageEditForm() {
       }
 
       img.onerror = () => reject(new Error("Failed to load image"))
-
       const reader = new FileReader()
       reader.onload = () => { img.src = reader.result as string }
       reader.onerror = () => reject(new Error("Failed to read file"))
@@ -97,7 +140,6 @@ export function ImageEditForm() {
         setError("L'image doit faire moins de 20MB.")
         return
       }
-
       if (!file.type.includes("png") && !file.type.includes("jpeg") && !file.type.includes("jpg")) {
         setError("Veuillez uploader une image PNG ou JPEG.")
         return
@@ -106,7 +148,7 @@ export function ImageEditForm() {
       setError(null)
       setResultImage(null)
       setProcessing(true)
-      setImage(file)
+      setShowDemo(false)
 
       try {
         const reader = new FileReader()
@@ -123,16 +165,17 @@ export function ImageEditForm() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     if (!processedImageData) return
 
     setLoading(true)
     setError(null)
     setResultImage(null)
 
+    const color = STONE_COLORS.find((c) => c.value === selectedColor) || STONE_COLORS[0]
+
     try {
-      // Upload image to Fal storage first
       const base64 = processedImageData.split(",")[1]
       const byteArray = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
       const blob = new Blob([byteArray], { type: "image/jpeg" })
@@ -140,13 +183,11 @@ export function ImageEditForm() {
 
       console.log("Uploading image to Fal storage...")
       const imageUrl = await fal.storage.upload(file)
-      console.log("Image uploaded:", imageUrl)
 
-      // Call Nano Banana 2 edit endpoint via proxy
       console.log("Calling Nano Banana 2 edit...")
       const result = await fal.subscribe("fal-ai/nano-banana-2/edit", {
         input: {
-          prompt: buildPrompt(selectedColor),
+          prompt: buildPrompt(color),
           image_urls: [imageUrl],
           output_format: "png",
         },
@@ -163,13 +204,9 @@ export function ImageEditForm() {
         throw new Error("Aucune image retournée par Fal AI")
       }
 
-      console.log("Image generated, fetching for display...")
-      // Fetch the image and convert to blob URL to avoid CORS issues in <img>
       const imgResponse = await fetch(outputUrl)
       const imgBlob = await imgResponse.blob()
       const blobUrl = URL.createObjectURL(imgBlob)
-
-      console.log("Image ready for display")
       setResultImage(blobUrl)
     } catch (err: any) {
       console.error("Error:", err)
@@ -190,33 +227,67 @@ export function ImageEditForm() {
     }
   }
 
-  const resetImages = () => {
-    setImage(null)
+  const resetAll = () => {
     setImagePreview(null)
     setProcessedImageData(null)
     setResultImage(null)
     setError(null)
+    setShowDemo(false)
   }
+
+  const selectedColorObj = STONE_COLORS.find((c) => c.value === selectedColor)
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-md space-y-5">
+        {/* Header */}
         <div className="text-center">
-          <img src="/logo-resiluxai.png" alt="Logo ResiluxAI" className="mx-auto mb-2 w-32 h-32 object-contain" />
+          <img src="/logo-resiluxai.png" alt="Logo ResiluxAI" className="mx-auto mb-1 w-28 h-28 object-contain" />
           {(processing || loading) && <GlowAnimation />}
-          <p className="text-gray-600 text-base font-medium">L'IA qui sublime votre terrasse en un clic</p>
+          <p className="text-gray-500 text-sm">L'IA qui sublime votre terrasse en un clic</p>
         </div>
 
-        {!imagePreview ? (
-          <Card className="p-6">
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label htmlFor="image" className="block text-sm font-medium text-gray-700 mb-2">
-                  Photo de votre terrasse
-                </label>
-                <div className="relative">
+        {/* Demo mode */}
+        {showDemo && (
+          <div className="space-y-3">
+            <Card className="p-4">
+              <BeforeAfterSlider beforeImage="/demo-avant.jpg" afterImage="/demo-apres.png" />
+            </Card>
+            <Button onClick={() => setShowDemo(false)} variant="outline" className="w-full">
+              Fermer la démo
+            </Button>
+          </div>
+        )}
+
+        {/* Result view */}
+        {resultImage && imagePreview && !showDemo && (
+          <div className="space-y-3">
+            <Card className="p-4">
+              <BeforeAfterSlider beforeImage={imagePreview} afterImage={resultImage} />
+            </Card>
+            <div className="grid grid-cols-2 gap-3">
+              <Button onClick={resetAll} variant="outline" className="w-full">
+                Nouvelle Photo
+              </Button>
+              <Button onClick={downloadImage} className="w-full">
+                <Download className="mr-2 h-4 w-4" />
+                Télécharger
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Main form (visible when no result and no demo) */}
+        {!resultImage && !showDemo && (
+          <>
+            {/* Image upload / preview */}
+            <Card className="p-5">
+              {!imagePreview ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Photo de votre terrasse
+                  </label>
                   <input
-                    id="image"
                     type="file"
                     accept="image/png,image/jpeg,image/jpg"
                     onChange={handleImageChange}
@@ -227,103 +298,101 @@ export function ImageEditForm() {
                   />
                   <Button
                     type="button"
-                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                    onClick={() => fileInputRef.current?.click()}
                     disabled={processing}
                     className="w-full flex items-center justify-center gap-2"
                   >
-                    <Upload className="h-5 w-5" />
-                    Prendre une photo ou Choisir une photo
+                    {processing ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Upload className="h-5 w-5" />
+                    )}
+                    {processing ? "Traitement..." : "Prendre ou choisir une photo"}
                   </Button>
-                  {processing && (
-                    <Loader2 className="absolute right-3 top-3 h-5 w-5 text-blue-600 animate-spin" />
-                  )}
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">Couleur des cailloux</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {STONE_COLORS.map((color) => (
-                    <button
-                      key={color.value}
-                      type="button"
-                      onClick={() => setSelectedColor(color.value)}
-                      className={`p-3 rounded-lg border-2 transition-all ${
-                        selectedColor === color.value
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200 hover:border-gray-300"
-                      }`}
-                    >
-                      <div
-                        className="w-8 h-8 rounded-full mx-auto mb-2 border"
-                        style={{ backgroundColor: color.color }}
-                      />
-                      <span className="text-xs font-medium">{color.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </form>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {!resultImage ? (
-              <Card className="p-4">
-                <div className="aspect-square w-full overflow-hidden rounded-lg bg-gray-100 mb-4">
-                  <img src={imagePreview || "/placeholder.svg"} alt="Original" className="w-full h-full object-cover" />
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Couleur sélectionnée:</span>
-                    <div className="flex items-center space-x-2">
-                      <div
-                        className="w-4 h-4 rounded-full border"
-                        style={{
-                          backgroundColor: STONE_COLORS.find((c) => c.value === selectedColor)?.color,
-                        }}
-                      />
-                      <span className="text-sm">{STONE_COLORS.find((c) => c.value === selectedColor)?.label}</span>
-                    </div>
+              ) : (
+                <div>
+                  <div className="aspect-video w-full overflow-hidden rounded-lg bg-gray-100 mb-3">
+                    <img src={imagePreview} alt="Original" className="w-full h-full object-cover" />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button onClick={resetImages} variant="outline" className="w-full">
-                      Changer
-                    </Button>
-                    <Button onClick={handleSubmit} disabled={loading || !processedImageData} className="w-full">
-                      {loading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Traitement...
-                        </>
-                      ) : (
-                        "Appliquer"
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                <BeforeAfterSlider beforeImage={imagePreview} afterImage={resultImage} />
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Button onClick={resetImages} variant="outline" className="w-full">
-                    Nouvelle Photo
-                  </Button>
-                  <Button onClick={downloadImage} className="w-full">
-                    <Download className="mr-2 h-4 w-4" />
-                    Télécharger
+                  <Button onClick={resetAll} variant="outline" size="sm" className="w-full">
+                    Changer de photo
                   </Button>
                 </div>
+              )}
+            </Card>
+
+            {/* Color selection - always visible */}
+            <Card className="p-5">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Coloris du revêtement
+              </label>
+              <div className="grid grid-cols-4 gap-2">
+                {STONE_COLORS.map((color) => (
+                  <button
+                    key={color.value}
+                    type="button"
+                    onClick={() => setSelectedColor(color.value)}
+                    className={`p-2 rounded-lg border-2 transition-all ${
+                      selectedColor === color.value
+                        ? "border-orange-500 bg-orange-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div
+                      className="w-10 h-10 rounded-full mx-auto mb-1.5 border border-gray-200"
+                      style={{ backgroundColor: color.color }}
+                    />
+                    <span className="text-[10px] leading-tight font-medium block text-center text-gray-700">
+                      {color.label}
+                    </span>
+                  </button>
+                ))}
               </div>
+
+              {selectedColorObj && (
+                <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
+                  <div
+                    className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                    style={{ backgroundColor: selectedColorObj.color }}
+                  />
+                  <span>{selectedColorObj.label}</span>
+                </div>
+              )}
+            </Card>
+
+            {/* Submit button */}
+            <Button
+              onClick={handleSubmit}
+              disabled={loading || !processedImageData}
+              className="w-full h-12 text-base bg-orange-600 hover:bg-orange-700"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Traitement en cours...
+                </>
+              ) : (
+                "Appliquer le revêtement"
+              )}
+            </Button>
+
+            {/* Demo link */}
+            {!imagePreview && (
+              <button
+                onClick={() => setShowDemo(true)}
+                className="w-full flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-orange-600 transition-colors py-2"
+              >
+                <Eye className="h-4 w-4" />
+                Voir un exemple avant / après
+              </button>
             )}
-          </div>
+          </>
         )}
 
+        {/* Error */}
         {error && (
-          <Card className="p-4 bg-red-50 border-red-200">
+          <Card className="p-3 bg-red-50 border-red-200">
             <div className="text-red-600 text-sm text-center">{error}</div>
           </Card>
         )}
