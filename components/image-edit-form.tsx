@@ -163,8 +163,14 @@ export function ImageEditForm() {
         throw new Error("Aucune image retournée par Fal AI")
       }
 
-      console.log("Image generated successfully")
-      setResultImage(outputUrl)
+      console.log("Image generated, fetching for display...")
+      // Fetch the image and convert to blob URL to avoid CORS issues in <img>
+      const imgResponse = await fetch(outputUrl)
+      const imgBlob = await imgResponse.blob()
+      const blobUrl = URL.createObjectURL(imgBlob)
+
+      console.log("Image ready for display")
+      setResultImage(blobUrl)
     } catch (err: any) {
       console.error("Error:", err)
       setError(err.message || "Une erreur s'est produite lors du traitement de l'image")
@@ -175,16 +181,12 @@ export function ImageEditForm() {
 
   const downloadImage = () => {
     if (resultImage) {
-      if (resultImage.startsWith("data:")) {
-        const link = document.createElement("a")
-        link.href = resultImage
-        link.download = "terrasse-revetement.png"
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      } else {
-        window.open(resultImage, "_blank")
-      }
+      const link = document.createElement("a")
+      link.href = resultImage
+      link.download = "terrasse-revetement.png"
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
     }
   }
 
