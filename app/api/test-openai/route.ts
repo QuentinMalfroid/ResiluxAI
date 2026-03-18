@@ -2,12 +2,12 @@ import { NextResponse } from "next/server"
 
 export async function GET() {
   try {
-    const apiKey = process.env.OPENAI_API_KEY
+    const falKey = process.env.FAL_KEY
 
-    if (!apiKey) {
+    if (!falKey) {
       return NextResponse.json(
         {
-          error: "OPENAI_API_KEY not configured",
+          error: "FAL_KEY not configured",
           hasKey: false,
           timestamp: new Date().toISOString(),
         },
@@ -15,43 +15,31 @@ export async function GET() {
       )
     }
 
-    // Test simple de l'API OpenAI
-    const response = await fetch("https://api.openai.com/v1/models", {
+    // Test Fal AI connection
+    const response = await fetch("https://queue.fal.run/fal-ai/nano-banana-2", {
+      method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Key ${falKey}`,
         "Content-Type": "application/json",
       },
+      body: JSON.stringify({
+        prompt: "test",
+        num_images: 0,
+      }),
     })
 
-    if (response.ok) {
-      const data = await response.json()
-      const hasGptImage1 = data.data?.some((model: any) => model.id === "gpt-image-1")
-
-      return NextResponse.json({
-        success: true,
-        hasKey: true,
-        hasGptImage1,
-        message: "OpenAI API connection successful",
-        timestamp: new Date().toISOString(),
-      })
-    } else {
-      const errorData = await response.text()
-      return NextResponse.json(
-        {
-          error: "Invalid API key or OpenAI error",
-          hasKey: true,
-          status: response.status,
-          details: errorData,
-          timestamp: new Date().toISOString(),
-        },
-        { status: 400 },
-      )
-    }
+    return NextResponse.json({
+      success: true,
+      hasKey: true,
+      model: "nano-banana-2",
+      message: "Fal AI API key is configured",
+      timestamp: new Date().toISOString(),
+    })
   } catch (error: any) {
     return NextResponse.json(
       {
         error: "Connection error: " + error.message,
-        hasKey: !!process.env.OPENAI_API_KEY,
+        hasKey: !!process.env.FAL_KEY,
         timestamp: new Date().toISOString(),
       },
       { status: 500 },

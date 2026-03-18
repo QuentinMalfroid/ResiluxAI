@@ -26,123 +26,52 @@ export function ImageEditForm() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const processImageForOpenAI = (file: File): Promise<string> => {
+  const processImageForAPI = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement("canvas")
       const ctx = canvas.getContext("2d")
       const img = new Image()
 
       img.onload = () => {
-        // Compression plus agressive pour rester sous 1MB
-        const originalSize = Math.max(img.width, img.height)
+        const maxSize = 1024
+        let width = img.width
+        let height = img.height
 
-        // Taille cible plus petite pour garantir < 1MB
-        let targetSize = 512 // Taille par défaut plus petite
-        let quality = 0.6 // Qualité plus basse par défaut
-
-        if (originalSize > 3000) {
-          targetSize = 400
-          quality = 0.5
-        } else if (originalSize > 2000) {
-          targetSize = 450
-          quality = 0.55
-        } else if (originalSize > 1500) {
-          targetSize = 500
-          quality = 0.6
-        } else {
-          targetSize = 600
-          quality = 0.7
+        // Scale down if needed while preserving aspect ratio
+        if (width > maxSize || height > maxSize) {
+          const scale = Math.min(maxSize / width, maxSize / height)
+          width = Math.round(width * scale)
+          height = Math.round(height * scale)
         }
 
-        // Set canvas to square dimensions
-        canvas.width = targetSize
-        canvas.height = targetSize
+        canvas.width = width
+        canvas.height = height
 
-        // Fill with white background
         if (ctx) {
-          ctx.fillStyle = "white"
-          ctx.fillRect(0, 0, targetSize, targetSize)
-
-          // Calculate scaling and positioning to center the image
-          const scale = Math.min(targetSize / img.width, targetSize / img.height)
-          const scaledWidth = img.width * scale
-          const scaledHeight = img.height * scale
-          const x = (targetSize - scaledWidth) / 2
-          const y = (targetSize - scaledHeight) / 2
-
-          // Enable image smoothing for better quality
           ctx.imageSmoothingEnabled = true
           ctx.imageSmoothingQuality = "high"
+          ctx.drawImage(img, 0, 0, width, height)
 
-          // Draw the image centered on the canvas
-          ctx.drawImage(img, x, y, scaledWidth, scaledHeight)
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.85)
+          const sizeInMB = ((dataUrl.length * 3) / 4) / (1024 * 1024)
 
-          // Fonction pour ajuster la qualité jusqu'à obtenir < 1MB
-          const tryCompress = (currentQuality: number): string => {
-            const dataUrl = canvas.toDataURL("image/jpeg", currentQuality) // Utiliser JPEG pour une meilleure compression
-            const sizeInBytes = (dataUrl.length * 3) / 4
-            const sizeInMB = sizeInBytes / (1024 * 1024)
+          console.log(`Image: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${sizeInMB.toFixed(2)}MB (${width}x${height})`)
 
-            console.log(`Tentative compression: qualité ${currentQuality}, taille ${sizeInMB.toFixed(2)}MB`)
-
-            // Si l'image est encore trop lourde et qu'on peut réduire la qualité
-            if (sizeInMB > 0.8 && currentQuality > 0.3) {
-              return tryCompress(currentQuality - 0.1)
-            }
-
-            // Si l'image est encore trop lourde, réduire la taille
-            if (sizeInMB > 0.8 && targetSize > 300) {
-              targetSize = Math.max(300, targetSize - 50)
-              canvas.width = targetSize
-              canvas.height = targetSize
-
-              ctx.fillStyle = "white"
-              ctx.fillRect(0, 0, targetSize, targetSize)
-
-              const newScale = Math.min(targetSize / img.width, targetSize / img.height)
-              const newScaledWidth = img.width * newScale
-              const newScaledHeight = img.height * newScale
-              const newX = (targetSize - newScaledWidth) / 2
-              const newY = (targetSize - newScaledHeight) / 2
-
-              ctx.drawImage(img, newX, newY, newScaledWidth, newScaledHeight)
-
-              return canvas.toDataURL("image/jpeg", currentQuality)
-            }
-
-            return dataUrl
-          }
-
-          const finalDataUrl = tryCompress(quality)
-          const finalSizeInBytes = (finalDataUrl.length * 3) / 4
-          const finalSizeInMB = finalSizeInBytes / (1024 * 1024)
-
-          console.log(
-            `Image finale: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${finalSizeInMB.toFixed(2)}MB (${targetSize}x${targetSize})`,
-          )
-
-          if (finalSizeInMB > 1) {
-            reject(new Error(`Image encore trop lourde après compression: ${finalSizeInMB.toFixed(2)}MB`))
+          if (sizeInMB > 8) {
+            reject(new Error(`Image encore trop lourde après compression: ${sizeInMB.toFixed(2)}MB`))
           } else {
-            resolve(finalDataUrl)
+            resolve(dataUrl)
           }
         } else {
           reject(new Error("Failed to get canvas context"))
         }
       }
 
-      img.onerror = () => {
-        reject(new Error("Failed to load image"))
-      }
+      img.onerror = () => reject(new Error("Failed to load image"))
 
-      // Convert file to data URL
       const reader = new FileReader()
-      reader.onload = () => {
-        img.src = reader.result as string
-      }
-      reader.onerror = () => {
-        reject(new Error("Failed to read file"))
-      }
+      reader.onload = () => { img.src = reader.result as string }
+      reader.onerror = () => reject(new Error("Failed to read file"))
       reader.readAsDataURL(file)
     })
   }
@@ -177,8 +106,8 @@ export function ImageEditForm() {
         }
         reader.readAsDataURL(file)
 
-        // Process image for OpenAI
-        const processedData = await processImageForOpenAI(file)
+        // Process image for API
+        const processedData = await processImageForAPI(file)
         setProcessedImageData(processedData)
       } catch (err: any) {
         setError("Erreur lors du traitement de l'image: " + err.message)

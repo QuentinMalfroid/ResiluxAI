@@ -5,6 +5,6 @@ export async function GET() {
     status: "healthy",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-    hasOpenAIKey: !!process.env.OPENAI_API_KEY,
+    hasFalKey: !!process.env.FAL_KEY,
   })
 }
