@@ -1,18 +1,39 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef } from "react"
+import { fal } from "@fal-ai/client"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Loader2, Upload, Download } from "lucide-react"
 import { BeforeAfterSlider } from "./before-after-slider"
+
+// Configure fal client to use our server proxy (hides API key)
+fal.config({ proxyUrl: "/api/fal/proxy" })
 
 const STONE_COLORS = [
   { value: "Light Grey", label: "Gris Clair", color: "#D1D5DB" },
   { value: "Dark Grey", label: "Gris Foncé", color: "#6B7280" },
   { value: "Beige", label: "Beige", color: "#D2B48C" },
 ]
+
+function buildPrompt(stoneColor: string) {
+  return `Edit this photo of a terrace to apply a realistic resin-bound gravel surface on the terrace floor only.
+
+IMPORTANT RULES:
+- ONLY modify the terrace floor/ground surface
+- DO NOT alter walls, background, sky, trees, furniture, or any other elements
+- Preserve the exact same perspective, lighting, and shadows from the original photo
+- The new surface must blend naturally with the existing lighting conditions
+
+SURFACE DETAILS:
+- Material: Resin-bound gravel finish (small tightly-packed pebbles embedded in resin)
+- Stone color: ${stoneColor}
+- Texture: Natural, slightly irregular pebble pattern typical of modern outdoor terraces
+- Finish: Smooth, professional installation look
+
+The goal is a photorealistic visualization of a terrace resurfaced with ${stoneColor} stone-resin finish.`
+}
 
 export function ImageEditForm() {
   const [image, setImage] = useState<File | null>(null)
@@ -37,7 +58,6 @@ export function ImageEditForm() {
         let width = img.width
         let height = img.height
 
-        // Scale down if needed while preserving aspect ratio
         if (width > maxSize || height > maxSize) {
           const scale = Math.min(maxSize / width, maxSize / height)
           width = Math.round(width * scale)
@@ -54,14 +74,8 @@ export function ImageEditForm() {
 
           const dataUrl = canvas.toDataURL("image/jpeg", 0.85)
           const sizeInMB = ((dataUrl.length * 3) / 4) / (1024 * 1024)
-
           console.log(`Image: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${sizeInMB.toFixed(2)}MB (${width}x${height})`)
-
-          if (sizeInMB > 8) {
-            reject(new Error(`Image encore trop lourde après compression: ${sizeInMB.toFixed(2)}MB`))
-          } else {
-            resolve(dataUrl)
-          }
+          resolve(dataUrl)
         } else {
           reject(new Error("Failed to get canvas context"))
         }
@@ -79,13 +93,11 @@ export function ImageEditForm() {
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      // Validate file size (increased limit since we compress)
       if (file.size > 20 * 1024 * 1024) {
         setError("L'image doit faire moins de 20MB.")
         return
       }
 
-      // Accept both PNG and JPEG (we'll convert to JPEG for better compression)
       if (!file.type.includes("png") && !file.type.includes("jpeg") && !file.type.includes("jpg")) {
         setError("Veuillez uploader une image PNG ou JPEG.")
         return
@@ -96,17 +108,11 @@ export function ImageEditForm() {
       setProcessing(true)
       setImage(file)
 
-      console.log(`Image originale: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
-
       try {
-        // Process image for preview
         const reader = new FileReader()
-        reader.onload = () => {
-          setImagePreview(reader.result as string)
-        }
+        reader.onload = () => setImagePreview(reader.result as string)
         reader.readAsDataURL(file)
 
-        // Process image for API
         const processedData = await processImageForAPI(file)
         setProcessedImageData(processedData)
       } catch (err: any) {
@@ -115,25 +121,6 @@ export function ImageEditForm() {
         setProcessing(false)
       }
     }
-  }
-
-  const pollForResult = async (requestId: string): Promise<string> => {
-    const maxAttempts = 120
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      const statusResponse = await fetch(`/api/edit-image/status?id=${requestId}`)
-      const statusResult = await statusResponse.json()
-
-      if (statusResult.status === "COMPLETED" && statusResult.imageUrl) {
-        return statusResult.imageUrl
-      }
-
-      if (statusResult.status === "FAILED") {
-        throw new Error(statusResult.error || "Le traitement a échoué")
-      }
-    }
-    throw new Error("Timeout: le traitement a pris trop de temps")
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -145,36 +132,42 @@ export function ImageEditForm() {
     setResultImage(null)
 
     try {
-      const response = await fetch("/api/edit-image", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      // Upload image to Fal storage first
+      const base64 = processedImageData.split(",")[1]
+      const byteArray = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+      const blob = new Blob([byteArray], { type: "image/jpeg" })
+      const file = new File([blob], "terrace.jpg", { type: "image/jpeg" })
+
+      console.log("Uploading image to Fal storage...")
+      const imageUrl = await fal.storage.upload(file)
+      console.log("Image uploaded:", imageUrl)
+
+      // Call Nano Banana 2 edit endpoint via proxy
+      console.log("Calling Nano Banana 2 edit...")
+      const result = await fal.subscribe("fal-ai/nano-banana-2/edit", {
+        input: {
+          prompt: buildPrompt(selectedColor),
+          image_urls: [imageUrl],
+          output_format: "png",
         },
-        body: JSON.stringify({
-          imageData: processedImageData,
-          stoneColor: selectedColor,
-        }),
+        logs: true,
+        onQueueUpdate: (update) => {
+          if (update.status === "IN_PROGRESS") {
+            console.log("Processing...")
+          }
+        },
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Une erreur s'est produite")
+      const outputUrl = (result.data as any)?.images?.[0]?.url
+      if (!outputUrl) {
+        throw new Error("Aucune image retournée par Fal AI")
       }
 
-      const result = await response.json()
-
-      if (result.status === "COMPLETED" && result.imageUrl) {
-        setResultImage(result.imageUrl)
-      } else if (result.requestId) {
-        // Poll for the result
-        const imageUrl = await pollForResult(result.requestId)
-        setResultImage(imageUrl)
-      } else {
-        throw new Error("Réponse inattendue du serveur")
-      }
+      console.log("Image generated successfully")
+      setResultImage(outputUrl)
     } catch (err: any) {
+      console.error("Error:", err)
       setError(err.message || "Une erreur s'est produite lors du traitement de l'image")
-      console.error(err)
     } finally {
       setLoading(false)
     }
@@ -183,7 +176,6 @@ export function ImageEditForm() {
   const downloadImage = () => {
     if (resultImage) {
       if (resultImage.startsWith("data:")) {
-        // Base64 image
         const link = document.createElement("a")
         link.href = resultImage
         link.download = "terrasse-revetement.png"
@@ -191,7 +183,6 @@ export function ImageEditForm() {
         link.click()
         document.body.removeChild(link)
       } else {
-        // URL image
         window.open(resultImage, "_blank")
       }
     }
@@ -210,7 +201,7 @@ export function ImageEditForm() {
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <img src="/logo-resiluxai.png" alt="Logo ResiluxAI" className="mx-auto mb-2 w-32 h-32 object-contain" />
-          {processing && <GlowAnimation />}
+          {(processing || loading) && <GlowAnimation />}
           <p className="text-gray-600 text-base font-medium">L'IA qui sublime votre terrasse en un clic</p>
         </div>
 
@@ -348,14 +339,3 @@ function GlowAnimation() {
     </div>
   )
 }
-
-<style jsx global>{`
-  @keyframes glow {
-    0% { filter: blur(16px) brightness(1.1); opacity: 0.7; }
-    50% { filter: blur(24px) brightness(1.5); opacity: 1; }
-    100% { filter: blur(16px) brightness(1.1); opacity: 0.7; }
-  }
-  .animate-glow {
-    animation: glow 2s infinite linear;
-  }
-`}</style>

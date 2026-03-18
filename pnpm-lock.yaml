@@ -11,6 +11,9 @@ importers:
       '@fal-ai/client':
         specifier: ^1.9.4
         version: 1.9.4
+      '@fal-ai/server-proxy':
+        specifier: ^1.2.1
+        version: 1.2.1(next@16.2.0(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@hookform/resolvers':
         specifier: ^3.9.1
         version: 3.9.1(react-hook-form@7.54.1(react@19.0.0))
@@ -200,6 +203,32 @@ packages:
   '@fal-ai/client@1.9.4':
     resolution: {integrity: sha512-mDjF2QDq+oficSSxzmErNkseQeRXnvUBEhJy39n4PPe7jRPZeSqM2SNb27SW50rDtCtay+stwFU8zRZehlt1Qg==}
     engines: {node: '>=18.0.0'}
+
+  '@fal-ai/server-proxy@1.2.1':
+    resolution: {integrity: sha512-A2HT3ppvdK0rmULPWQ4ipEDb5LkUtcn8q72N6jwlhpSNIn50/2d68kaNxDqpE/re7ExyzS7SM3z0D1+Uo7H3bA==}
+    peerDependencies:
+      '@remix-run/dev': ^2.0.0
+      '@sveltejs/kit': ^2.0.0
+      express: ^4.0.0
+      hono: ^4.0.0
+      next: 13.4 - 14 || >=15.0.0-0
+      react: ^18.0.0 || >=19.0.0-0
+      react-dom: ^18.0.0 || >=19.0.0-0
+    peerDependenciesMeta:
+      '@remix-run/dev':
+        optional: true
+      '@sveltejs/kit':
+        optional: true
+      express:
+        optional: true
+      hono:
+        optional: true
+      next:
+        optional: true
+      react:
+        optional: true
+      react-dom:
+        optional: true
 
   '@floating-ui/core@1.7.0':
     resolution: {integrity: sha512-FRdBLykrPPA6P76GGGqlex/e7fbe0F1ykgxHYNXQsH/iTEtjMj/f9bpY5oQqbjt5VgZvgz/uKXbGuROijh3VLA==}
@@ -1576,6 +1605,10 @@ packages:
     resolution: {integrity: sha512-JU3teHTNjmE2VCGFzuY8EXzCDVwEqB2a8fsIvwaStHhAWJEeVd1o1QD80CU6+ZdEXXSLbSsuLwJjkCBWqRQUVA==}
     engines: {node: '>=8.6'}
 
+  picomatch@4.0.3:
+    resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
+    engines: {node: '>=12'}
+
   pify@2.3.0:
     resolution: {integrity: sha512-udgsAY+fTnvv7kI7aaxbqwWNb0AHiB0qBO89PZKPkoTmGOgdbrHDKD+0B2X4uTfJ/FT1R09r9gTsjUjNJotuog==}
     engines: {node: '>=0.10.0'}
@@ -1935,6 +1968,14 @@ snapshots:
       '@msgpack/msgpack': 3.1.3
       eventsource-parser: 1.1.2
       robot3: 0.4.1
+
+  '@fal-ai/server-proxy@1.2.1(next@16.2.0(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0)':
+    dependencies:
+      picomatch: 4.0.3
+    optionalDependencies:
+      next: 16.2.0(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      react: 19.0.0
+      react-dom: 19.0.0(react@19.0.0)
 
   '@floating-ui/core@1.7.0':
     dependencies:
@@ -3229,6 +3270,8 @@ snapshots:
   picocolors@1.1.1: {}
 
   picomatch@2.3.1: {}
+
+  picomatch@4.0.3: {}
 
   pify@2.3.0: {}
 
