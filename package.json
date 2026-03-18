@@ -47,7 +47,7 @@
     "https": "latest",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
-    "next": "15.2.4",
+    "next": "16.2.0",
     "next-themes": "^0.4.4",
     "react": "^19",
     "react-day-picker": "8.10.1",
@@ -62,12 +62,12 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@netlify/plugin-nextjs": "^5.11.2",
+    "@netlify/plugin-nextjs": "^5.15.9",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "postcss": "^8",
     "tailwindcss": "^3.4.17",
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   }
 }
